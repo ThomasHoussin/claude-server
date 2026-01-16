@@ -48,3 +48,20 @@ npm test     # Tests
 - User-data logs: `/var/log/user-data.log`
 - code-server logs: `journalctl -u code-server@ec2-user`
 - nginx logs: `/var/log/nginx/error.log`
+
+## Enable SSH Password Authentication (Optional)
+
+By default, SSH uses key-based authentication only. To enable password login:
+
+```bash
+# 1. Set a password for ec2-user
+sudo passwd ec2-user
+
+# 2. Enable password authentication
+sudo sed -i 's/^PasswordAuthentication no/PasswordAuthentication yes/' /etc/ssh/sshd_config
+
+# 3. Restart SSH
+sudo systemctl restart sshd
+```
+
+Then connect with any SSH client using `ec2-user@<domain>` and the password you set.

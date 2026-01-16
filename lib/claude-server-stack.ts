@@ -143,7 +143,7 @@ export class ClaudeServerStack extends Stack {
     securityGroup.addIngressRule(
       Peer.anyIpv4(),
       Port.tcp(80),
-      'HTTP for Let\'s Encrypt validation'
+      'HTTP for Lets Encrypt validation'
     );
 
     // SSH access (open to all as per user preference)

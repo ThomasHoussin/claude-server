@@ -14,13 +14,18 @@ CODE_SERVER_PASSWORD="__CODE_SERVER_PASSWORD__"
 EMAIL="__EMAIL__"
 
 # === INSTALLATION PACKAGES ===
-echo "[1/5] Installing packages..."
+echo "[1/6] Installing packages..."
 dnf update -y
 dnf install -y nginx git nodejs npm
 
 # === CODE-SERVER ===
-echo "[2/5] Installing code-server..."
-curl -fsSL https://code-server.dev/install.sh | sh
+echo "[2/6] Installing code-server..."
+export HOME=/root
+if ! command -v code-server &> /dev/null; then
+  curl -fsSL https://code-server.dev/install.sh | sh
+else
+  echo "code-server already installed, skipping"
+fi
 
 # Config code-server
 mkdir -p /home/ec2-user/.config/code-server
@@ -37,7 +42,7 @@ chown -R ec2-user:ec2-user /home/ec2-user/.config
 systemctl enable --now code-server@ec2-user
 
 # === NGINX (HTTP only for certbot) ===
-echo "[3/5] Configuring nginx..."
+echo "[3/6] Configuring nginx..."
 mkdir -p /var/www/html
 
 cat > /etc/nginx/conf.d/code-server.conf << 'NGINX_EOF'
@@ -55,19 +60,23 @@ server {
 }
 NGINX_EOF
 
-systemctl start nginx
 systemctl enable nginx
+systemctl restart nginx
 
 # === CERTBOT ===
-echo "[4/5] Setting up SSL certificate..."
+echo "[4/6] Setting up SSL certificate..."
 dnf install -y certbot
 
-# Use webroot mode (no nginx plugin conflict)
-certbot certonly --webroot -w /var/www/html \
-  -d "${DOMAIN}" --non-interactive --agree-tos -m "${EMAIL}"
+if [ -f "/etc/letsencrypt/live/${DOMAIN}/fullchain.pem" ]; then
+  echo "SSL certificate already exists, skipping certbot"
+else
+  # Use webroot mode (no nginx plugin conflict)
+  certbot certonly --webroot -w /var/www/html \
+    -d "${DOMAIN}" --non-interactive --agree-tos -m "${EMAIL}"
+fi
 
 # === NGINX SSL CONFIG ===
-# Now write the full SSL config after certificate is obtained
+# Write the full SSL config (cert must exist at this point)
 cat > /etc/nginx/conf.d/code-server.conf << 'NGINX_EOF'
 # WebSocket upgrade mapping
 map $http_upgrade $connection_upgrade {
@@ -131,17 +140,25 @@ ADDITIONAL_KEYS="__ADDITIONAL_SSH_KEYS__"
 
 # Check if keys were provided (starts with ssh- means valid key, not empty placeholder)
 if echo "$ADDITIONAL_KEYS" | grep -q "^ssh-"; then
-  echo "$ADDITIONAL_KEYS" >> /home/ec2-user/.ssh/authorized_keys
+  echo "$ADDITIONAL_KEYS" | while IFS= read -r key; do
+    if [ -n "$key" ] && ! grep -qF "$key" /home/ec2-user/.ssh/authorized_keys 2>/dev/null; then
+      echo "$key" >> /home/ec2-user/.ssh/authorized_keys
+      echo "Added SSH key"
+    fi
+  done
   chmod 600 /home/ec2-user/.ssh/authorized_keys
   chown ec2-user:ec2-user /home/ec2-user/.ssh/authorized_keys
-  echo "Additional SSH keys added"
 else
   echo "No additional SSH keys configured"
 fi
 
 # === CLAUDE CODE ===
 echo "[6/6] Installing Claude Code..."
-npm install -g @anthropic-ai/claude-code
+if ! command -v claude &> /dev/null; then
+  npm install -g @anthropic-ai/claude-code
+else
+  echo "Claude Code already installed, skipping"
+fi
 
 # === FINALISATION ===
 echo "=========================================="
