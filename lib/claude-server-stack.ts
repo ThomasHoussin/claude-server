@@ -14,11 +14,12 @@ import {
   KeyPair,
   BlockDeviceVolume,
   EbsDeviceVolumeType,
+  CfnEIP,
+  CfnEIPAssociation,
 } from 'aws-cdk-lib/aws-ec2';
 import {
   Role,
   ServicePrincipal,
-  PolicyStatement,
   ManagedPolicy,
 } from 'aws-cdk-lib/aws-iam';
 import { Construct } from 'constructs';
@@ -37,11 +38,6 @@ function validateConfig(cfg: Config): void {
   // Domain validation
   if (!cfg.domain || !/^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)*\.[a-z]{2,}$/i.test(cfg.domain)) {
     throw new Error(`Invalid domain format: "${cfg.domain}". Expected format: subdomain.domain.tld`);
-  }
-
-  // Hosted Zone ID validation (starts with Z)
-  if (!cfg.hostedZoneId || !cfg.hostedZoneId.startsWith('Z')) {
-    throw new Error(`Invalid hostedZoneId: "${cfg.hostedZoneId}". Must start with 'Z'`);
   }
 
   // Password validation (minimum 8 characters)
@@ -143,12 +139,6 @@ export class ClaudeServerStack extends Stack {
       assumedBy: new ServicePrincipal('ec2.amazonaws.com'),
     });
 
-    // Route 53 permission for dynamic DNS
-    role.addToPolicy(new PolicyStatement({
-      actions: ['route53:ChangeResourceRecordSets'],
-      resources: [`arn:aws:route53:::hostedzone/${config.hostedZoneId}`],
-    }));
-
     // SSM permission for backup access via AWS Console
     role.addManagedPolicy(
       ManagedPolicy.fromAwsManagedPolicyName('AmazonSSMManagedInstanceCore')
@@ -160,10 +150,8 @@ export class ClaudeServerStack extends Stack {
       'utf8'
     )
       .replace(/__DOMAIN__/g, config.domain)
-      .replace(/__HOSTED_ZONE_ID__/g, config.hostedZoneId)
       .replace(/__CODE_SERVER_PASSWORD__/g, config.codeServerPassword)
-      .replace(/__EMAIL__/g, config.email)
-      .replace(/__REGION__/g, this.region);
+      .replace(/__EMAIL__/g, config.email);
 
     const userData = UserData.forLinux();
     userData.addCommands(userDataScript);
@@ -187,6 +175,21 @@ export class ClaudeServerStack extends Stack {
       }],
     });
 
+    // Elastic IP (optional)
+    let publicIp = instance.instancePublicIp;
+    if (config.useElasticIp) {
+      const eip = new CfnEIP(this, 'DevServerEIP', {
+        domain: 'vpc',
+      });
+
+      new CfnEIPAssociation(this, 'DevServerEIPAssociation', {
+        allocationId: eip.attrAllocationId,
+        instanceId: instance.instanceId,
+      });
+
+      publicIp = eip.attrPublicIp;
+    }
+
     // Outputs
     new CfnOutput(this, 'InstanceId', {
       value: instance.instanceId,
@@ -194,8 +197,8 @@ export class ClaudeServerStack extends Stack {
     });
 
     new CfnOutput(this, 'PublicIP', {
-      value: instance.instancePublicIp,
-      description: 'Public IP address',
+      value: publicIp,
+      description: config.useElasticIp ? 'Elastic IP address (static)' : 'Public IP address (changes on restart)',
     });
 
     new CfnOutput(this, 'AccessURL', {
@@ -206,6 +209,11 @@ export class ClaudeServerStack extends Stack {
     new CfnOutput(this, 'SSHCommand', {
       value: `ssh ec2-user@${config.domain}`,
       description: 'SSH command to connect',
+    });
+
+    new CfnOutput(this, 'DNSSetup', {
+      value: `Create A record: ${config.domain} -> <PublicIP>`,
+      description: 'DNS configuration required (manual setup in Route 53)',
     });
   }
 }

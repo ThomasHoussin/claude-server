@@ -10,67 +10,16 @@ echo "=========================================="
 
 # === CONFIGURATION (injected by CDK) ===
 DOMAIN="__DOMAIN__"
-HOSTED_ZONE_ID="__HOSTED_ZONE_ID__"
 CODE_SERVER_PASSWORD="__CODE_SERVER_PASSWORD__"
 EMAIL="__EMAIL__"
-REGION="__REGION__"
-
-# === DNS DYNAMIQUE ===
-echo "[1/7] Updating DNS..."
-IP=$(curl -s http://169.254.169.254/latest/meta-data/public-ipv4)
-echo "Public IP: ${IP}"
-
-# Create JSON file for Route 53 (avoid shell injection)
-cat > /tmp/dns-change.json << EOF
-{
-  "Changes": [{
-    "Action": "UPSERT",
-    "ResourceRecordSet": {
-      "Name": "${DOMAIN}",
-      "Type": "A",
-      "TTL": 60,
-      "ResourceRecords": [{"Value": "${IP}"}]
-    }
-  }]
-}
-EOF
-
-aws route53 change-resource-record-sets \
-  --hosted-zone-id "${HOSTED_ZONE_ID}" \
-  --change-batch file:///tmp/dns-change.json \
-  --region "${REGION}"
-
-rm -f /tmp/dns-change.json
-
-# === DNS VALIDATION ===
-echo "[2/7] Waiting for DNS propagation..."
-dnf install -y bind-utils  # for dig command
-
-MAX_ATTEMPTS=30
-ATTEMPT=0
-while [ $ATTEMPT -lt $MAX_ATTEMPTS ]; do
-  RESOLVED_IP=$(dig +short "${DOMAIN}" @8.8.8.8 | tail -1)
-  if [ "${RESOLVED_IP}" = "${IP}" ]; then
-    echo "DNS propagated successfully"
-    break
-  fi
-  ATTEMPT=$((ATTEMPT + 1))
-  echo "Attempt ${ATTEMPT}/${MAX_ATTEMPTS}: DNS not ready yet (got '${RESOLVED_IP}', expected '${IP}')"
-  sleep 10
-done
-
-if [ "${RESOLVED_IP}" != "${IP}" ]; then
-  echo "ERROR: DNS propagation timeout after ${MAX_ATTEMPTS} attempts"
-  exit 1
-fi
 
 # === INSTALLATION PACKAGES ===
-echo "[3/7] Installing packages..."
+echo "[1/5] Installing packages..."
 dnf update -y
 dnf install -y nginx git nodejs npm
 
 # === CODE-SERVER ===
-echo "[4/7] Installing code-server..."
+echo "[2/5] Installing code-server..."
 curl -fsSL https://code-server.dev/install.sh | sh
 
 # Config code-server
@@ -88,7 +37,7 @@ chown -R ec2-user:ec2-user /home/ec2-user/.config
 systemctl enable --now code-server@ec2-user
 
 # === NGINX (HTTP only for certbot) ===
-echo "[5/7] Configuring nginx..."
+echo "[3/5] Configuring nginx..."
 mkdir -p /var/www/html
 
 cat > /etc/nginx/conf.d/code-server.conf << 'NGINX_EOF'
@@ -112,7 +61,7 @@ systemctl start nginx
 systemctl enable nginx
 
 # === CERTBOT ===
-echo "[6/7] Setting up SSL certificate..."
+echo "[4/5] Setting up SSL certificate..."
 dnf install -y certbot
 
 # Use webroot mode (no nginx plugin conflict)
@@ -180,7 +129,7 @@ sed -i "s/__DOMAIN_PLACEHOLDER__/${DOMAIN}/g" /etc/nginx/conf.d/code-server.conf
 nginx -t && systemctl restart nginx
 
 # === CLAUDE CODE ===
-echo "[7/7] Installing Claude Code..."
+echo "[5/5] Installing Claude Code..."
 npm install -g @anthropic-ai/claude-code
 
 # === FINALISATION ===

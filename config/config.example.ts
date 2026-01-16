@@ -6,11 +6,14 @@
  */
 
 export interface Config {
-  // Your subdomain for code-server (e.g., dev.yourdomain.com)
+  // Your domain for code-server (e.g., dev.yourdomain.com)
+  // DNS must be configured manually to point to the instance IP
   domain: string;
 
-  // Route 53 Hosted Zone ID for your domain
-  hostedZoneId: string;
+  // Use Elastic IP for static IP address (optional, default: false)
+  // When true: creates a static IP that persists across instance stops
+  // When false: uses auto-assigned public IP (changes on restart)
+  useElasticIp?: boolean;
 
   // Password to access code-server web interface
   codeServerPassword: string;
@@ -30,7 +33,7 @@ export interface Config {
 
 export const config: Config = {
   domain: 'dev.example.com',
-  hostedZoneId: 'ZXXXXXXXXXXXXX',
+  useElasticIp: true,
   codeServerPassword: 'change-me-with-strong-password',
   email: 'your@email.com',
   keyPairName: 'your-key-pair-name',
