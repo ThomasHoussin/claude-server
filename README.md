@@ -5,7 +5,7 @@ A CDK stack that deploys a remote development environment accessible via browser
 - **code-server** (VS Code in the browser)
 - **nginx** reverse proxy with HTTPS
 - **Let's Encrypt** automatic SSL certificate
-- **Route 53** dynamic DNS
+- **Route 53** DNS (optional, for automatic DNS management)
 - **Claude Code CLI** pre-installed
 
 ## Architecture
@@ -21,9 +21,23 @@ A CDK stack that deploys a remote development environment accessible via browser
                                            |
                                            v
                                  +-----------------------------+
-                                 |  Route 53                   |
+                                 |  Route 53 (optional)        |
                                  |  dev.yourdomain.com -> IP   |
                                  +-----------------------------+
+```
+
+## Project Structure
+
+```
+claude-server/
+├── bin/claude-server.ts       # CDK app entry point
+├── lib/claude-server-stack.ts # Main CDK stack
+├── config/
+│   ├── config.example.ts      # Configuration template (committed)
+│   └── config.ts              # Actual config (gitignored)
+├── scripts/
+│   └── init.sh                # EC2 user-data script
+└── test/                      # CDK tests
 ```
 
 ## Prerequisites
@@ -31,8 +45,8 @@ A CDK stack that deploys a remote development environment accessible via browser
 1. **AWS Account** with CLI configured (`aws configure`)
 2. **Node.js** 18+ installed
 3. **AWS CDK** installed globally: `npm install -g aws-cdk`
-4. **Route 53 Hosted Zone** for your domain
-5. **EC2 Key Pair** created in us-east-1 region
+4. **EC2 Key Pair** created in your target region
+5. **Route 53 Hosted Zone** (optional, for automatic DNS management)
 
 ## Setup
 
@@ -52,18 +66,22 @@ Edit `config/config.ts` with your values:
 
 | Variable | Description | Example |
 |----------|-------------|---------|
+| `region` | AWS region for deployment | `us-east-1` |
 | `domain` | Subdomain for code-server | `dev.mysite.com` |
-| `hostedZoneId` | Route 53 Hosted Zone ID | `Z0123456789ABC` |
 | `codeServerPassword` | Password for code-server access | `MyStr0ngP@ss!` |
 | `email` | Email for Let's Encrypt | `me@email.com` |
 | `keyPairName` | EC2 Key Pair name | `my-key-pair` |
-| `instanceType` | EC2 instance type | `t4g.small` |
-| `volumeSize` | EBS volume size (GB) | `30` |
+| `instanceType` | EC2 instance type (optional) | `t4g.small` |
+| `volumeSize` | EBS volume size in GB (optional) | `30` |
+| `useElasticIp` | Use static Elastic IP (optional) | `true` |
+| `hostedZoneId` | Route 53 Hosted Zone ID (optional) | `Z0123456789ABC` |
+
+**Note:** If `useElasticIp` is `true` and `hostedZoneId` is provided, DNS is managed automatically by CDK. Otherwise, create the DNS A record manually.
 
 ### 3. Bootstrap CDK (first time only)
 
 ```bash
-cdk bootstrap aws://YOUR_ACCOUNT_ID/us-east-1
+cdk bootstrap aws://YOUR_ACCOUNT_ID/YOUR_REGION
 ```
 
 ### 4. Deploy

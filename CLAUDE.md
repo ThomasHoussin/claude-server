@@ -1,92 +1,48 @@
-# CLAUDE.md - Project Context for Claude Code
+# Claude Server - Instructions pour Claude Code
 
-## Project Overview
+## Contexte
 
-This is a CDK (Cloud Development Kit) project that deploys a remote development environment on AWS. The environment provides VS Code in the browser via code-server, with Claude Code CLI pre-installed.
+Projet CDK déployant un environnement de développement remote sur AWS : EC2 (ARM64) + code-server (VS Code browser) + Claude Code CLI.
 
-## Tech Stack
+## Fichiers clés
 
-- **Infrastructure**: AWS CDK v2 (TypeScript)
-- **Compute**: EC2 t4g.small (ARM64, Amazon Linux 2023)
-- **Web Server**: nginx (reverse proxy with HTTPS)
-- **SSL**: Let's Encrypt via Certbot
-- **IP**: Optional Elastic IP for static addressing
-- **IDE**: code-server (VS Code in browser)
-- **AI Assistant**: Claude Code CLI
+- `lib/claude-server-stack.ts` - Stack CDK principale (VPC, SG, EC2, Elastic IP optionnel, DNS optionnel)
+- `config/config.ts` - Configuration sensible (gitignored) - copier depuis `config.example.ts`
+- `scripts/init.sh` - Script user-data EC2 (installe nginx, code-server, certbot, Claude CLI)
+- `bin/claude-server.ts` - Point d'entrée CDK
 
-## Project Structure
+## Règles importantes
 
-```
-claude-server/
-+-- bin/claude-server.ts       # CDK app entry point
-+-- lib/claude-server-stack.ts # Main CDK stack
-+-- config/
-|   +-- config.example.ts      # Configuration template (committed)
-|   +-- config.ts              # Actual config (gitignored)
-+-- scripts/
-|   +-- init.sh                # EC2 user-data script
-+-- test/                      # CDK tests
-```
-
-## Key Files
-
-### config/config.ts
-Contains sensitive configuration (domain, passwords, etc.). Copy from `config.example.ts` and fill in real values. This file is gitignored.
-
-### lib/claude-server-stack.ts
-Main CDK stack that creates:
-- VPC (uses default)
-- Security Group (ports 22, 80, 443)
-- IAM Role (SSM permissions only)
-- EC2 Instance with user-data
-- Optional Elastic IP (if `useElasticIp: true`)
-
-### scripts/init.sh
-Runs at EC2 boot to:
-1. Install nginx, code-server, certbot
-2. Configure HTTPS with Let's Encrypt
-3. Install Claude Code CLI
-
-## Common Commands
-
-```bash
-# Synthesize CloudFormation
-cdk synth
-
-# Deploy stack
-cdk deploy
-
-# Show changes
-cdk diff
-
-# Destroy stack
-cdk destroy
-
-# Run tests
-npm test
-```
+1. **NE JAMAIS commit `config/config.ts`** - contient des secrets (passwords, domain)
+2. SSH ouvert à 0.0.0.0/0 - c'est intentionnel pour flexibilité avec Termius
+3. DNS géré par CDK (pas par l'instance EC2) - si `useElasticIp: true` + `hostedZoneId` fourni
+4. L'instance n'a que les permissions SSM, pas Route 53
 
 ## Configuration
 
-All configuration is in `config/config.ts`:
-- `domain`: Domain for the dev server (DNS must be configured manually)
-- `useElasticIp`: Use static Elastic IP (optional, default: false)
-- `codeServerPassword`: Password for VS Code web access
-- `email`: Email for Let's Encrypt
-- `keyPairName`: EC2 key pair for SSH
-- `instanceType`: EC2 instance type (t4g.small default)
-- `volumeSize`: EBS volume size in GB
+Options dans `config/config.ts` :
+- `region` - Région AWS
+- `domain` - Domaine pour code-server
+- `hostedZoneId` - Zone Route 53 (optionnel, pour DNS auto)
+- `useElasticIp` - Utiliser une IP statique (optionnel, défaut: false)
+- `codeServerPassword` - Mot de passe VS Code web
+- `email` - Email Let's Encrypt
+- `keyPairName` - Paire de clés EC2
+- `instanceType` - Type d'instance (défaut: t4g.small)
+- `volumeSize` - Taille EBS en GB
 
-## Important Notes
+## Commandes
 
-1. **Never commit config/config.ts** - it contains secrets
-2. **DNS must be configured manually** - create an A record pointing to the instance IP
-3. **Region is fixed to us-east-1** - can be changed in bin/claude-server.ts
-4. **SSH is open to 0.0.0.0/0** - intentional for flexibility with Termius
-5. **SSM Session Manager is enabled** as backup access method
+```bash
+cdk synth    # Générer CloudFormation
+cdk deploy   # Déployer
+cdk diff     # Voir les changements
+cdk destroy  # Supprimer
+npm test     # Tests
+```
 
 ## Debugging
 
-- User-data logs: `/var/log/user-data.log` on the EC2 instance
-- code-server logs: `journalctl -u code-server@ec2-user`
-- nginx logs: `/var/log/nginx/error.log`
+- Logs user-data : `/var/log/user-data.log`
+- Logs code-server : `journalctl -u code-server@ec2-user`
+- Logs nginx : `/var/log/nginx/error.log`

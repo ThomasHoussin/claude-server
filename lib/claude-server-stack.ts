@@ -1,4 +1,4 @@
-import { Stack, CfnOutput, type StackProps } from 'aws-cdk-lib';
+import { Stack, CfnOutput, Duration, type StackProps } from 'aws-cdk-lib';
 import {
   Vpc,
   SecurityGroup,
@@ -22,6 +22,7 @@ import {
   ServicePrincipal,
   ManagedPolicy,
 } from 'aws-cdk-lib/aws-iam';
+import { HostedZone, ARecord, RecordTarget } from 'aws-cdk-lib/aws-route53';
 import { Construct } from 'constructs';
 import { readFileSync } from 'fs';
 import { join, dirname } from 'path';
@@ -38,6 +39,11 @@ function validateConfig(cfg: Config): void {
   // Domain validation
   if (!cfg.domain || !/^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)*\.[a-z]{2,}$/i.test(cfg.domain)) {
     throw new Error(`Invalid domain format: "${cfg.domain}". Expected format: subdomain.domain.tld`);
+  }
+
+  // Hosted Zone ID validation (optional, but if provided must start with Z)
+  if (cfg.hostedZoneId && !cfg.hostedZoneId.startsWith('Z')) {
+    throw new Error(`Invalid hostedZoneId: "${cfg.hostedZoneId}". Must start with 'Z'`);
   }
 
   // Password validation (minimum 8 characters)
@@ -177,6 +183,8 @@ export class ClaudeServerStack extends Stack {
 
     // Elastic IP (optional)
     let publicIp = instance.instancePublicIp;
+    let dnsAutoConfigured = false;
+
     if (config.useElasticIp) {
       const eip = new CfnEIP(this, 'DevServerEIP', {
         domain: 'vpc',
@@ -188,6 +196,23 @@ export class ClaudeServerStack extends Stack {
       });
 
       publicIp = eip.attrPublicIp;
+
+      // Create DNS record automatically if hostedZoneId is provided
+      if (config.hostedZoneId) {
+        const hostedZone = HostedZone.fromHostedZoneAttributes(this, 'HostedZone', {
+          hostedZoneId: config.hostedZoneId,
+          zoneName: config.domain.split('.').slice(1).join('.'), // Extract parent domain
+        });
+
+        new ARecord(this, 'DevServerDNS', {
+          zone: hostedZone,
+          recordName: config.domain,
+          target: RecordTarget.fromIpAddresses(eip.attrPublicIp),
+          ttl: Duration.minutes(5),
+        });
+
+        dnsAutoConfigured = true;
+      }
     }
 
     // Outputs
@@ -212,8 +237,12 @@ export class ClaudeServerStack extends Stack {
     });
 
     new CfnOutput(this, 'DNSSetup', {
-      value: `Create A record: ${config.domain} -> <PublicIP>`,
-      description: 'DNS configuration required (manual setup in Route 53)',
+      value: dnsAutoConfigured
+        ? `DNS A record created automatically for ${config.domain}`
+        : `Create A record: ${config.domain} -> <PublicIP>`,
+      description: dnsAutoConfigured
+        ? 'DNS configured automatically via CDK'
+        : 'DNS configuration required (manual setup in Route 53)',
     });
   }
 }
