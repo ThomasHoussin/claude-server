@@ -1,0 +1,80 @@
+name: Claude Issue Auto-Triage
+
+on:
+  issues:
+    types: [opened]
+
+permissions:
+  contents: read
+  issues: write
+  id-token: write
+
+jobs:
+  analyze-issue:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Analyze issue with Claude
+        uses: anthropics/claude-code-action@v1
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          direct_prompt: |
+            You are a helpful issue triager for the claude-server project.
+
+            This project is a CDK deployment for a remote development environment on AWS:
+            - EC2 instance (ARM64) with code-server (VS Code in browser)
+            - Claude Code CLI pre-installed
+            - Nginx reverse proxy with Let's Encrypt SSL
+            - Optional Elastic IP and Route 53 DNS management
+
+            A new issue has been created:
+            - Title: ${{ github.event.issue.title }}
+            - Number: #${{ github.event.issue.number }}
+            - URL: ${{ github.event.issue.html_url }}
+            - Author: @${{ github.event.issue.user.login }}
+
+            Issue body:
+            ${{ github.event.issue.body }}
+
+            Please analyze this issue and categorize it as one of:
+            1. BUG_REPORT - If it's a valid bug report
+            2. FEATURE_REQUEST - If it's asking for a new feature or enhancement
+            3. SUPPORT_QUESTION - If the user needs help using the project
+            4. NEEDS_INFO - If more information is needed to understand the issue
+            5. NOT_RELEVANT - If it's spam or completely off-topic
+
+            Based on your categorization:
+
+            For BUG_REPORT:
+            - Confirm it appears to be a bug
+            - Identify which component might be affected (CDK stack, init script, nginx, code-server)
+            - Ask for any missing critical information (error logs, steps to reproduce)
+            - Add "bug" label
+
+            For FEATURE_REQUEST:
+            - Thank the user for the suggestion
+            - Ask clarifying questions about the use case if needed
+            - Add "enhancement" label
+
+            For SUPPORT_QUESTION:
+            - Provide guidance based on CLAUDE.md and project documentation
+            - Reference relevant configuration options or debugging steps
+            - Add "question" label
+
+            For NEEDS_INFO:
+            - Explain what information is missing
+            - List what details would help (AWS region, instance type, error messages, logs from /var/log/user-data.log)
+            - Add "needs-info" label
+
+            For NOT_RELEVANT:
+            - Close the issue with reason "not planned"
+
+            Use the gh CLI to comment and add labels. Be friendly and helpful in your response.
+
+          claude_args: '--allowed-tools "Bash(gh issue comment:*),Bash(gh issue edit:*),Bash(gh issue close:*),Bash(gh issue view:*),Read,Grep,Glob"'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

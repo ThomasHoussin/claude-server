@@ -16,7 +16,7 @@ A CDK stack that deploys a remote development environment accessible via browser
 +-------------+                  |  +-- nginx (reverse proxy)  |
                                  |  +-- code-server (VS Code)  |
 +-------------+      SSH/22      |  +-- Claude Code CLI        |
-|   Termius   | ---------------> |                             |
+| SSH Client  | ---------------> |                             |
 +-------------+                  +-----------------------------+
                                            |
                                            v
@@ -123,11 +123,11 @@ CDK automatically validates that the SSM parameter exists before deploying.
 
 | Resource | Cost/month |
 |----------|------------|
-| EC2 t4g.small | ~$15 |
+| EC2 t4g.small | ~$12 |
 | Public IP | ~$3.60 |
 | EBS 30GB GP3 | ~$2.40 |
 | Route 53 | ~$0.50 |
-| **Total** | **~$21/month** |
+| **Total** | **~$18.5/month** |
 
 To reduce costs:
 - Use `t4g.micro` (~$8/month total)

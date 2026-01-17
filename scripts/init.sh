@@ -19,7 +19,13 @@ ENABLE_SSH_PASSWORD_AUTH="__ENABLE_SSH_PASSWORD_AUTH__"
 # === INSTALLATION PACKAGES ===
 echo "[1/8] Installing packages..."
 dnf update -y
-dnf install -y nginx git nodejs npm
+dnf install -y nginx git nodejs22 nodejs22-npm
+
+# === GITHUB CLI ===
+echo "[1b/8] Installing GitHub CLI..."
+dnf install -y 'dnf-command(config-manager)'
+dnf config-manager --add-repo https://cli.github.com/packages/rpm/gh-cli.repo
+dnf install -y gh --repo gh-cli
 
 # === RETRIEVE PASSWORD FROM SSM ===
 echo "[2/8] Retrieving code-server password from SSM..."
@@ -178,7 +184,6 @@ if [ "$ENABLE_SSH_PASSWORD_AUTH" = "true" ]; then
   echo "[6/8] Enabling SSH password authentication..."
 
   # Set ec2-user password (same as code-server)
-  # Using here-string to avoid password exposure in process list
   chpasswd <<< "ec2-user:${CODE_SERVER_PASSWORD}"
 
   # Enable password authentication in sshd_config (handles both commented and uncommented)
