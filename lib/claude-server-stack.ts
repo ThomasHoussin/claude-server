@@ -185,7 +185,8 @@ export class ClaudeServerStack extends Stack {
       .replace(/__EMAIL__/g, config.email)
       .replace(/__ADDITIONAL_SSH_KEYS__/g, additionalSshKeys)
       .replace(/__AWS_REGION__/g, config.region)
-      .replace(/__SSM_PASSWORD_PARAMETER__/g, config.ssmPasswordParameterName);
+      .replace(/__SSM_PASSWORD_PARAMETER__/g, config.ssmPasswordParameterName)
+      .replace(/__ENABLE_SSH_PASSWORD_AUTH__/g, config.enableSshPasswordAuth ? 'true' : 'false');
 
     const userData = UserData.forLinux();
     userData.addCommands(userDataScript);

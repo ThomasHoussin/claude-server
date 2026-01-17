@@ -76,6 +76,7 @@ Edit `config/config.ts` with your values:
 | `volumeSize` | EBS volume size in GB (optional) | `30` |
 | `useElasticIp` | Use static Elastic IP (optional) | `true` |
 | `hostedZoneId` | Route 53 Hosted Zone ID (optional) | `Z0123456789ABC` |
+| `enableSshPasswordAuth` | Enable SSH password login (optional) | `false` |
 
 **Note:** If `useElasticIp` is `true` and `hostedZoneId` is provided, DNS is managed automatically by CDK. Otherwise, create the DNS A record manually.
 
@@ -111,7 +112,7 @@ CDK automatically validates that the SSM parameter exists before deploying.
 2. Enter your code-server password
 3. Open terminal (Ctrl+`) and run `claude`
 
-### SSH (Termius)
+### SSH 
 
 1. Host: `dev.yourdomain.com`
 2. User: `ec2-user`
@@ -173,6 +174,10 @@ sudo certbot renew
 - Password is stored securely in AWS SSM Parameter Store as SecureString (encrypted with KMS).
 - SSM Session Manager is enabled as a backup access method.
 - Never commit `config/config.ts` to version control.
+
+## SSH Password Authentication
+
+By default, SSH uses key-based authentication only. To enable password login, set `enableSshPasswordAuth: true` in your config. This uses the same password as code-server (from SSM Parameter Store).
 
 ## License
 

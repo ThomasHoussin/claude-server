@@ -14,14 +14,15 @@ DOMAIN="__DOMAIN__"
 EMAIL="__EMAIL__"
 AWS_REGION="__AWS_REGION__"
 SSM_PASSWORD_PARAMETER="__SSM_PASSWORD_PARAMETER__"
+ENABLE_SSH_PASSWORD_AUTH="__ENABLE_SSH_PASSWORD_AUTH__"
 
 # === INSTALLATION PACKAGES ===
-echo "[1/7] Installing packages..."
+echo "[1/8] Installing packages..."
 dnf update -y
 dnf install -y nginx git nodejs npm
 
 # === RETRIEVE PASSWORD FROM SSM ===
-echo "[2/7] Retrieving code-server password from SSM..."
+echo "[2/8] Retrieving code-server password from SSM..."
 
 # Check if AWS CLI is available
 if ! command -v aws &> /dev/null; then
@@ -56,7 +57,7 @@ fi
 echo "Password retrieved successfully from SSM"
 
 # === CODE-SERVER ===
-echo "[3/7] Installing code-server..."
+echo "[3/8] Installing code-server..."
 export HOME=/root
 if ! command -v code-server &> /dev/null; then
   curl -fsSL https://code-server.dev/install.sh | sh
@@ -80,7 +81,7 @@ chmod 600 /home/ec2-user/.config/code-server/config.yaml
 systemctl enable --now code-server@ec2-user
 
 # === NGINX (HTTP only for certbot) ===
-echo "[4/7] Configuring nginx..."
+echo "[4/8] Configuring nginx..."
 mkdir -p /var/www/html
 
 cat > /etc/nginx/conf.d/code-server.conf << 'NGINX_EOF'
@@ -102,7 +103,7 @@ systemctl enable nginx
 systemctl restart nginx
 
 # === CERTBOT ===
-echo "[5/7] Setting up SSL certificate..."
+echo "[5/8] Setting up SSL certificate..."
 dnf install -y certbot
 
 if [ -f "/etc/letsencrypt/live/${DOMAIN}/fullchain.pem" ]; then
@@ -172,8 +173,36 @@ NGINX_EOF
 
 nginx -t && systemctl restart nginx
 
+# === SSH PASSWORD AUTH (optional) ===
+if [ "$ENABLE_SSH_PASSWORD_AUTH" = "true" ]; then
+  echo "[6/8] Enabling SSH password authentication..."
+
+  # Set ec2-user password (same as code-server)
+  # Using here-string to avoid password exposure in process list
+  chpasswd <<< "ec2-user:${CODE_SERVER_PASSWORD}"
+
+  # Enable password authentication in sshd_config (handles both commented and uncommented)
+  sed -i -E 's/^#?PasswordAuthentication (yes|no)/PasswordAuthentication yes/' /etc/ssh/sshd_config
+
+  # Validate sshd config before restart
+  if ! sshd -t 2>/dev/null; then
+    echo "ERROR: Invalid sshd configuration after enabling password auth"
+    exit 1
+  fi
+
+  # Restart SSH service
+  if ! systemctl restart sshd; then
+    echo "ERROR: Failed to restart sshd service"
+    exit 1
+  fi
+
+  echo "SSH password authentication enabled"
+else
+  echo "[6/8] SSH password authentication disabled (key-based only)"
+fi
+
 # === ADDITIONAL SSH KEYS ===
-echo "[6/7] Adding additional SSH keys..."
+echo "[7/8] Adding additional SSH keys..."
 ADDITIONAL_KEYS="__ADDITIONAL_SSH_KEYS__"
 
 # Check if keys were provided (starts with ssh- means valid key, not empty placeholder)
@@ -191,7 +220,7 @@ else
 fi
 
 # === CLAUDE CODE ===
-echo "[7/7] Installing Claude Code..."
+echo "[8/8] Installing Claude Code..."
 if ! command -v claude &> /dev/null; then
   npm install -g @anthropic-ai/claude-code
 else

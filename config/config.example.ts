@@ -42,6 +42,10 @@ export interface Config {
 
   // EBS volume size in GB
   volumeSize: number;
+
+  // Enable SSH password authentication (optional, default: false)
+  // When true, uses the same password as code-server for SSH login
+  enableSshPasswordAuth?: boolean;
 }
 
 export const config: Config = {
@@ -57,4 +61,5 @@ export const config: Config = {
   ],
   instanceType: 't4g.small',
   volumeSize: 30,
+  enableSshPasswordAuth: false,
 };

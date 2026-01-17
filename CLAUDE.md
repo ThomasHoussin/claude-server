@@ -32,6 +32,7 @@ Options in `config/config.ts`:
 - `additionalSshPublicKeys` - Additional SSH public keys (optional, for YubiKeys etc.)
 - `instanceType` - Instance type (default: t4g.small)
 - `volumeSize` - EBS volume size in GB
+- `enableSshPasswordAuth` - Enable SSH password login (optional, default: false)
 
 ## SSM Password Setup (Required before deploy)
 
@@ -61,19 +62,3 @@ npm test     # Tests
 - code-server logs: `journalctl -u code-server@ec2-user`
 - nginx logs: `/var/log/nginx/error.log`
 
-## Enable SSH Password Authentication (Optional)
-
-By default, SSH uses key-based authentication only. To enable password login:
-
-```bash
-# 1. Set a password for ec2-user
-sudo passwd ec2-user
-
-# 2. Enable password authentication
-sudo sed -i 's/^PasswordAuthentication no/PasswordAuthentication yes/' /etc/ssh/sshd_config
-
-# 3. Restart SSH
-sudo systemctl restart sshd
-```
-
-Then connect with any SSH client using `ec2-user@<domain>` and the password you set.
