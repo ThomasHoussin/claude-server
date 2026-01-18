@@ -19,7 +19,7 @@ ENABLE_SSH_PASSWORD_AUTH="__ENABLE_SSH_PASSWORD_AUTH__"
 # === INSTALLATION PACKAGES ===
 echo "[1/8] Installing packages..."
 dnf update -y
-dnf install -y nginx git nodejs22 nodejs22-npm
+dnf install -y nginx git nodejs22 nodejs22-npm tmux screen
 
 # === GITHUB CLI ===
 echo "[1b/8] Installing GitHub CLI..."
